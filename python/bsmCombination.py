@@ -13,6 +13,7 @@ parser.add_option("","--feyn",help="FeynHiggs [%default]",default=os.environ['PW
 parser.add_option("","--flags",help="FeynHiggs flags [%default]",default="42423110")
 parser.add_option("-m","--model",help="LHCHXSDatacard [%default]",default='/'.join([os.environ['PWD'],'FeynHiggs-2.14.0', 'example','LHCHXSWG','mhmodm-LHCHXSWG.in']))
 parser.add_option("","--ncore",type='int',help="num. of core. [%default]",default=4)
+parser.add_option("-t","--templates",action='append',help="Template files to be copied in the work directory [%default]",default=[])
 
 scan_options = OptionGroup(parser,"Scan options","")
 scan_options.add_option("","--mhp",help="MHp points (1000 or 100,200,500 or 200:1000:100) [%default]",default="1000")
@@ -22,17 +23,48 @@ scan_options.add_option("-q","--queue",help="Batch Queue [%default]",default="1n
 combine_options = OptionGroup(parser,"Combine Options","")
 combine_options.add_option("-C","--combine",action='append',help="Pass this option to combine. Eg. '-M Asymptotics', '-t -1', ...",default=[])
 
+debug_options = OptionGroup(parser,"Debug options","")
+debug_options.add_option("","--debug",action='store_true',help="Debug status and printout [%default]",default=False)
+# add a verbosity 
+
 parser.add_option_group(scan_options)
 parser.add_option_group(combine_options)
+parser.add_option_group(debug_options)
 
 opts,args=parser.parse_args()
+
+#################
+### functions ###
+#################
+
+def drange(start, stop, step):
+        ''' Return a floating range list. Start and stop are included in the list if possible.'''
+        eps = 0.000001
+        r = start
+        while r <= stop+eps:
+                yield r
+                r += step
+
+def listFromStr(s):
+    r = []
+    for comma in s.split(','):
+        if ':' in comma:
+            start=float(comma.split(':')[0])
+            stop =float(comma.split(':')[1])
+            end  =float(comma.split(':')[2])
+            r.extend([x for x in drange(start,stop,end)])
+        else:
+            r.append(float(comma))
+    return r
 
 
 from glob import glob
 from subprocess import call, check_output
 import threading
+import time
 
-chMap={'Hptn':['Hptn','HplusTauNu'],   ## possible process name
+# these lists are tried in order. Put the less constraining first
+chMap={'Hptn':['CMS_Hptntj_Hp%(mass)d_a','Hptn','HplusTauNu'],   ## possible process name
        'Hptb':['Hptb','HplusTopBottom','CMS_Hptbemu_Hpemu','CMS_Hptbmumu_Hpmumu','CMS_Hptbee_Hpee','CMS_Hptbmt_Hptb'],
     }
 ###################
@@ -48,7 +80,46 @@ if not os.path.exists(os.path.expandvars('$CMSSW_BASE/bin/$SCRAM_ARCH/combineCar
 if not os.path.exists(os.path.expandvars('$CMSSW_BASE/bin/$SCRAM_ARCH/combineTool.py')):
         sys.exit('ERROR - CombinedTool package must be installed')
 
+####################
+## check work dir ##
+####################
 
+st = call("[ -d %s ] && rmdir %s || [ ! -d %s ]"%(opts.dir,opts.dir,opts.dir),shell=True)
+if st != 0: raise IOError("ERROR: directory " + opts.dir+ " already exist and not empty")
+call("mkdir -p %s"%opts.dir,shell=True)
+
+## copy templates inside
+if opts.debug: print "[DEBUG]","Copying template files"
+for t in opts.templates:
+    st = call("cp -v %s %s"%(t,opts.dir),shell=True)
+    if st !=0: raise IOError("unable to copy file %s in %s"%(t,opts.dir))
+
+########################################
+## compute lists of mhp and tb to run ##
+########################################
+
+mhp=listFromStr(opts.mhp)
+tb =listFromStr(opts.tb)
+
+if opts.debug:
+    print "[DEBUG]","I will run on MHp",','.join(["%.0f"%x for x in mhp])
+    print "[DEBUG]","I will run on tb",','.join(["%.1f"%x for x in tb])
+
+## update chMap if there is a channel with mass in the name
+for ch in chMap:
+    l=[]
+    for procname in chMap[ch]:
+        if '%' in procname:
+            for m in mhp:
+                l.append(procname%{"mass":int(m)})
+        else:
+            l.append(procname)
+    chMap[ch]=l
+
+if opts.debug:
+    print "[DEBUG]", "Supported channels are:"
+    for ch in chMap:
+        print "[DEBUG]","  *)",ch,":",",".join(chMap[ch])
 ##########################################################
 ## preparation: parse cards, add scaling and merge them ##
 ##########################################################
@@ -68,17 +139,22 @@ for chIdx,chStr in enumerate(opts.channel):
     print "[INFO]: Considering datacard #%d:"%chIdx, fname
     print "   -) type ",ch
     print "   -) sqrtS ",sqrtS,"TeV"
-    datacard=opts.dir +'/ch%d.txt'%chIdx.txt
+    datacard=opts.dir +'/ch%d.txt'%chIdx
     cmd=' '.join(['cp','-v',fname,datacard])
     st=call(cmd,shell=True)
     if st != 0 : raise IOError("Unable to run:'"+cmd+"'")
     ok=False
     for procname in chMap[ch]:
-        cmd=' '.join(['grep',"'s///g'",datacard,"2>&1",">/dev/null"])
+        cmd=' '.join(['grep',procname,datacard,"2>&1",">/dev/null"])
         st=call(cmd,shell=True)
+        if opts.debug:
+            print "[DEBUG]","considered process",procname,"in datacard",datacard,"and results is",st
+            print "[DEBUG]","   - command was",cmd
         if st != 0 : continue
         ok=True
         txt = open(datacard,"a")
+        print >> txt, ""  ## newline
+        print >> txt, "### automatically added by:",sys.argv[0]  ## 
         print >> txt, "xsec_hp_%dTeV"%sqrtS,"rateParam","*",procname,"1.0"
         print >> txt, "br_"+ch,"rateParam","*",procname,"1.0"
         print >> txt, "nuisance","edit","freeze","xsec_hp_%dTeV"%sqrtS
@@ -101,34 +177,17 @@ for chIdx,chStr in enumerate(opts.channel):
 ####################
 ## Combine cards  ##
 ####################
+if opts.debug: print "[DEBUG]","Combined datacards"
+
 combDatacard=opts.dir+"/datacard.txt"
 cmdCombineCards+= " >"+combDatacard
 st=call(cmdCombineCards,shell=True)
 if st != 0 : raise IOError("Unable to run:'"+cmdCombineCards+"'")
 
-def drange(start, stop, step):
-        ''' Return a floating range list. Start and stop are included in the list if possible.'''
-        eps = 0.000001
-        r = start
-        while r <= stop+eps:
-                yield r
-                r += step
-
-def listFromStr(s):
-    r = []
-    for comma in s.split(','):
-        if ':' in comma:
-            start=float(comma.split(':')[0])
-            stop =float(comma.split(':')[1])
-            end  =float(comma.split(':')[2])
-            r.extend([x for x in drange(start,stop,end)])
-        else:
-            r.append(float(mstr))
-    return r
 
 def parallel(cmd):
 	print "-> Parallel command :'"+cmd+"'"
-	if text2ws != "/bin/true":
+	if cmd != "/bin/true":
 		st = call(cmd,shell=True);
 	else: 
 		st =0
@@ -138,14 +197,13 @@ def parallel(cmd):
 		raise RuntimeError('Unable to excute command call')
 	return 0 
 
-mhp=listFromStr(opts.mhp)
-tb =listFromStr(opts.tb)
 ####################
 ## text2workspace ##
 ####################
+if opts.debug: print "[DEBUG]","Running text2workspace on all the mass points"
 threads=[]
 for m in mhp:
-    cmd=' '.join(['text2workspace.py' ,'-m%f'%m,'-o %s/datacard_MHp%.0f.root'%m])
+    text2ws=' '.join(['text2workspace.py' ,'-m%f'%m,'-o %s/datacard_MHp%.0f.root'%(opts.dir,m),combDatacard])
     while threading.activeCount() >= opts.ncore:
         print "sleep ....",
         time.sleep(1)
@@ -163,9 +221,11 @@ for t in threads:
 ########################
 def prepareSubmission(m,t):
     ''' Main submission routine. Function of MHp and TB'''
+    if opts.debug: print "[DEBUG]","Starting prepare submission for point (%(mass).0f,%(tb).1f)"%{"mass":m,"tb":t}
     #compute parameters using FeynHiggs
     params=[]
     for idx,sqrtS in enumerate(allSqrtS):
+        if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f) is considering sqrtS=%(sqrtS).0f"%{"mass":m,"tb":t,"sqrtS":sqrtS}
         fcard=opts.dir+"/feyn.MHp%.0f.tb%.1f.sqrtS%dTeV.in"%(m,t,sqrtS)
         cmd=' '.join(['cp','-v',opts.model,fcard])
         #1 copy feyn higgs card
@@ -181,16 +241,17 @@ def prepareSubmission(m,t):
         fstream.close()
         fout=opts.dir+"/feyn.MHp%.0f.tb%.1f.sqrtS%dTeV.out"%(m,t,sqrtS)
         cmd=' '.join([opts.feyn,fcard,opts.flags,">",fout])
+        if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) is running FEynHiggs"%{"mass":m,"tb":t,"sqrtS":sqrtS}
         st = call(cmd,shell=True)
+        if st != 0 : raise IOError("Unable to run:'"+cmd+"'") ## run FeynHiggs
 
-        cmd = cmdFeyn + "| grep 'prod:alt-t-Hp' | sed 's/^.*=//'"
-        if st != 0 : raise IOError("Unable to run:'"+cmd+"'")
-
+        #cmd = "cat "+ fout + "| grep 'prod:alt-t-Hp' | sed 's/^.*=//'"
         #"xsec_hp_%dTeV"%sqrtS
         #  | prod:alt-t-Hp         =     20.6766    
         cmd=' '.join(['cat',fout,"|","grep 'prod:alt-t-Hp'","|","sed 's/^.*=//'","|","tr -d ' '"])
         out=check_output(cmd,shell=True)
-        params.append(["xsec_hp_%dTeV=%f"%(sqrtS,float(out))])
+        if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) FeynHiggs xsec=%(out)s"%{"mass":m,"tb":t,"sqrtS":sqrtS,"out":out}
+        params.append("xsec_hp_%dTeV=%f"%(sqrtS,float(out)))
         if idx == 0:
             for ch in allCh:
                 gstr=""
@@ -198,9 +259,11 @@ def prepareSubmission(m,t):
                 elif ch =="Hptb":gstr="Hp-t-b"
                 #   ch gamma br
                 #%| Hp-nu_tau-tau        =    0.484940       6.063097E-02
-                cmd=' '.join(['cat',fout,"|","grep '"+gstr+"'","|","sed 's/^.*=//'","|","sed 's/^\ *//'","|","tr -s ' '" ,"|","cut -d ' ' -f2"])
+                cmd=' '.join(['cat',fout,"|","grep '"+gstr+"'","|","grep -v CL" ,"|","grep -v CR","|","sed 's/^.*=//'","|","sed 's/^\ *//'","|","tr -s ' '" ,"|","cut -d ' ' -f2"])
                 out=check_output(cmd,shell=True)
-                params.append(["br_%s=%f"%(ch,float(out))])
+                if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) FeynHiggs br for %(ch)s is %(out)s"%{"mass":m,"tb":t,"sqrtS":sqrtS,"out":out,"ch":ch}
+                #if opts.debug: print "[DEBUG]","with cmd:",cmd
+                params.append("br_%s=%f"%(ch,float(out)))
     ## end computing parameters with feynhiggs
     ## start writing batch commands. Use combine Tool!
     d=opts.dir+"/batch_MHp%.0f_tb%.1f"%(m,t)
@@ -213,7 +276,7 @@ def prepareSubmission(m,t):
     datacard=os.environ['PWD']+'/'+opts.dir+'/datacard_MHp%.0f.root'%m
     if opts.dir[0] == '/':
         datacard=opts.dir+'/datacard_MHp%.0f.root'%m
-    cmd+= ' '.join(['combineTool.py',datacard,'-m %f'%m,"--job_mode lxbatch","--sub-opts='-q "+opts.queue+"'","--task-name BSM_Scan_MHp%.0f_TB%.1f"%(m,t)])
+    cmd+= ' '.join(['combineTool.py',datacard,'-m %f'%m,"--job-mode lxbatch","--sub-opts='-q "+opts.queue+"'","--task-name BSM_Scan_MHp%.0f_TB%.1f"%(m,t)])
     combine=[]
     splitPointsDefault="--split-points 30"
     for c in opts.combine:
@@ -231,11 +294,14 @@ def prepareSubmission(m,t):
     print>>sh,"## Command issued automatically by",sys.argv[0]
     print>>sh,cmd
 
+    if opts.debug: print "[DEBUG]","going to call combineTools with cmd:",cmd
+
     st=call(cmd,shell=True)
     if st != 0 : raise IOError("Unable to run:'"+cmd+"'")
     return
 
 
+if opts.debug: print "[DEBUG]","Preparing for job submission"
 threads=[]
 for m in mhp:
     for t in tb:
@@ -252,6 +318,7 @@ for t in threads:
     t.join()
 
 print "-> DONE :D "
+if opts.debug: print "[DEBUG]","That's all folks!"
         
 # to change
 #TB
