@@ -157,6 +157,7 @@ for chIdx,chStr in enumerate(opts.channel):
         print >> txt, "### automatically added by:",sys.argv[0]  ## 
         print >> txt, "xsec_hp_%dTeV"%sqrtS,"rateParam","*",procname,"1.0"
         print >> txt, "br_"+ch,"rateParam","*",procname,"1.0"
+        #print >> txt, "tb extArg 100" # doesn't work for limits
         print >> txt, "nuisance","edit","freeze","xsec_hp_%dTeV"%sqrtS
         print >> txt, "nuisance","edit","freeze","br_"+ch
         txt.close()
@@ -224,6 +225,7 @@ def prepareSubmission(m,t):
     if opts.debug: print "[DEBUG]","Starting prepare submission for point (%(mass).0f,%(tb).1f)"%{"mass":m,"tb":t}
     #compute parameters using FeynHiggs
     params=[]
+    #params.append("tb=%f"%(t)) # doesn't work
     for idx,sqrtS in enumerate(allSqrtS):
         if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f) is considering sqrtS=%(sqrtS).0f"%{"mass":m,"tb":t,"sqrtS":sqrtS}
         fcard=opts.dir+"/feyn.MHp%.0f.tb%.1f.sqrtS%dTeV.in"%(m,t,sqrtS)
@@ -288,6 +290,7 @@ def prepareSubmission(m,t):
         if '--split-points' in c: splitPointsDefault=""
         combine .append(c)
     cmd+= ' ' + '--setParameters='+','.join(params)
+    #cmd+= ' ' + '--saveSpecifiedNuis=tb' # doesn't work
     cmd+= ' ' + ' '.join(combine)
     cmd+= ' ' + splitPointsDefault
 
