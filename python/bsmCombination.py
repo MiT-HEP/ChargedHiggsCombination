@@ -14,6 +14,7 @@ parser.add_option("","--flags",help="FeynHiggs flags [%default]",default="424231
 parser.add_option("-m","--model",help="LHCHXSDatacard [%default]",default='/'.join([os.environ['PWD'],'FeynHiggs-2.14.0', 'example','LHCHXSWG','mhmodm-LHCHXSWG.in']))
 parser.add_option("","--ncore",type='int',help="num. of core. [%default]",default=4)
 parser.add_option("-t","--templates",action='append',help="Template files to be copied in the work directory [%default]",default=[])
+parser.add_option("","--br1",dest="br1",default=False,action="store_true",help="don't scale for br")
 
 scan_options = OptionGroup(parser,"Scan options","")
 scan_options.add_option("","--mhp",help="MHp points (1000 or 100,200,500 or 200:1000:100) [%default]",default="1000")
@@ -156,10 +157,10 @@ for chIdx,chStr in enumerate(opts.channel):
         print >> txt, ""  ## newline
         print >> txt, "### automatically added by:",sys.argv[0]  ## 
         print >> txt, "xsec_hp_%dTeV"%sqrtS,"rateParam","*",procname,"1.0"
-        print >> txt, "br_"+ch,"rateParam","*",procname,"1.0"
+        if not opts.br1: print >> txt, "br_"+ch,"rateParam","*",procname,"1.0"
         #print >> txt, "tb extArg 100" # doesn't work for limits
         print >> txt, "nuisance","edit","freeze","xsec_hp_%dTeV"%sqrtS
-        print >> txt, "nuisance","edit","freeze","br_"+ch
+        if not opts.br1: print >> txt, "nuisance","edit","freeze","br_"+ch
         txt.close()
         break
 
@@ -254,7 +255,7 @@ def prepareSubmission(m,t):
         out=check_output(cmd,shell=True)
         if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) FeynHiggs xsec=%(out)s"%{"mass":m,"tb":t,"sqrtS":sqrtS,"out":out}
         params.append("xsec_hp_%dTeV=%f"%(sqrtS,float(out)))
-        if idx == 0:
+        if idx == 0 and not opts.br1:
             for ch in allCh:
                 gstr=""
                 if ch=="Hptn":gstr="Hp-nu_tau-tau"
@@ -293,6 +294,8 @@ def prepareSubmission(m,t):
     #cmd+= ' ' + '--saveSpecifiedNuis=tb' # doesn't work
     cmd+= ' ' + ' '.join(combine)
     cmd+= ' ' + splitPointsDefault
+    cmd+= ' ' + '--rMin=0'
+    cmd+= ' ' + '--rMax=5' ## I care only around 1
 
     print>>sh,"## Command issued automatically by",sys.argv[0]
     print>>sh,cmd
