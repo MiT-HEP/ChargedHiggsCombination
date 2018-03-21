@@ -4,13 +4,14 @@ from optparse import OptionParser
 parser = OptionParser()
 parser.add_option("-f","--file",dest="file",default="",type="string",help="Input file")
 parser.add_option("-l","--label",dest="label",default="",type="string",help="Label to add to the plot")
-parser.add_option("-o","--outname",dest="outname",help="Name of output pdf/png/C")
+parser.add_option("-o","--outname",dest="outname",help="Name of output pdf/png/C [%default]",default="")
 parser.add_option("-b","--batch",dest="batch",default=False,action="store_true")
 parser.add_option("-u","--unblind",dest="unblind",default=False,action="store_true",help="Draw observation")
 parser.add_option(""  ,"--yaxis",help="Y axis range Y1,Y2 [%default]",default="")
 parser.add_option(""  ,"--xaxis",help="X axis range X1,X2 [%default]",default="")
 parser.add_option("","--paper",dest="paper",default=False,action="store_true",help="don't display preliminary")
 parser.add_option("","--supplementary",dest="supplementary",default=False,action="store_true")
+parser.add_option(""  ,"--debug",type='int',help="More verbose output [%default]",default=0)
 
 opts,args=parser.parse_args()
 
@@ -31,7 +32,7 @@ f=ROOT.TFile.Open(opts.file)
 t=f.Get("limit")
 
 def GetLimit(t, quantile=0.5):
-    print "DEBUG","considering quantile",quantile
+    if opts.debug: print "[DEBUG]:[1]","considering quantile",quantile
     maxTB=60
     minTB=0
     r={}
@@ -41,7 +42,7 @@ def GetLimit(t, quantile=0.5):
         l  = t.limit
         q  = t.quantileExpected
         tb  = t.tb
-        #print "DEBUG","processing entry",ientry,[mh,l,q,tb]
+        if opts.debug>1: print "[DEBUG]:[2]","processing entry",ientry,[mh,l,q,tb]
         if abs(q-quantile) >1e-3 : continue
         if "%.1f"%mh not in r: r["%.1f"%mh]=[]
         r["%.1f"%mh].append( (tb,l) )
@@ -54,31 +55,36 @@ def GetLimit(t, quantile=0.5):
     masses.sort()
     keys=[ "%.1f"%y  for y in masses ]
     for mhstr in keys : ## keys are sorted
+        if opts.debug>2: print "[DEBUG]:[3]","Considering mh=",mhstr
         mh=float(mhstr)
         r[mhstr].sort()
+        if opts.debug>2: print "[DEBUG]:[3]","    -->",r[mhstr]
         count=0
         for i in range(0, len(r[mhstr])-1):
             n = r[mhstr][i+1]
             c = r[mhstr][i]
-            print "Considering limits at between tb",c[0],n[0]," that corresponds to", c[1],n[1]
+            if opts.debug>2: print "[DEBUG]:[3]","Considering limits at between tb",c[0],n[0]," that corresponds to", c[1],n[1]
             if (c[1] < 1. and n[1] >=1.) or (c[1] >= 1. and n[1] <1.): 
                 tb=interpolate(c[1],c[0],n[1],n[0],1.)
                 if count==0:
-                    print "DEBUG: Adding point limit",mh,tb,"for quantile",quantile 
+                    if opts.debug: print "[DEBUG]:[1]: Adding point limit",mh,tb,"for quantile",quantile 
                     g0.SetPoint(g0.GetN(),mh,tb)
                 if count >1: 
-                    print "WARNING: found second crossing at:",mh,tb
+                    print "[WARNING]","Found second crossing at:",mh,tb
                     g1.SetPoint(g1.GetN(),mh,tb)
                 count+=1
 
         if count==0:
-            print "WARNING: unable to find crossing for",mh,"at quantile",quantile,r[mhstr]
+            if opts.debug>0: print "[WARNING]:[1]","Unable to find crossing for",mh,"at quantile",quantile,r[mhstr]
+            else: print "[WARNING]:[1]","Unable to find crossing for",mh,"at quantile",quantile
+
             if n[1] >1:
                 g0.SetPoint(g0.GetN(),mh,maxTB)
             else:
                 g0.SetPoint(g0.GetN(),mh,minTB)
         else:
-            print "HURRAH!: Able to find crossing for",mh,"at quantile",quantile,r[mhstr]
+            if opts.debug>1: print "[DEBUG]:[2]","HURRAH!: Able to find crossing for",mh,"at quantile",quantile,r[mhstr]
+            elif opts.debug>0: print "[DEBUG]:[1]","HURRAH!: Able to find crossing for",mh,"at quantile",quantile
 
     return g0,g1
 
@@ -108,6 +114,12 @@ for idx in range(0,oneUp.GetN()):
     x1=oneDn.GetX()[idx]
     y1=oneDn.GetY()[idx]
 
+    if abs(x0-x1)>1.e-3:
+        print "---- TWO UP ---"
+        oneUp.Print("V")
+        print "---- TWO DN ---"
+        oneDn.Print("V")
+        print "---------------"
     if abs(x0-x1)>1.e-3: raise ValueError("Assuming %f==%f"%(x0,x1))
     if abs(x0-xref)>1.e-3: raise ValueError("Assuming %f==%f"%(x0,xref))
     if abs(xref-x1)>1.e-3: raise ValueError("Assuming %f==%f"%(xref,x1))
@@ -118,13 +130,20 @@ for idx in range(0,oneUp.GetN()):
     ydn=yref -min(y1,y0) 
     one.SetPointError(n,0,0,ydn,yup)
 
-    print "->",x0," median is",yref,"one",ydn,yup
+    if opts.debug>0: print "[DEBUG]:[1]","Results: ->",x0," median is",yref,"two",ydn,yup
+    one_yup,one_ydn=yup,ydn
 
     x0=twoUp.GetX()[idx]
     y0=twoUp.GetY()[idx]
     x1=twoDn.GetX()[idx]
     y1=twoDn.GetY()[idx]
 
+    if abs(x0-x1)>1.e-3:
+        print "---- TWO UP ---"
+        twoUp.Print("V")
+        print "---- TWO DN ---"
+        twoDn.Print("V")
+        print "---------------"
     if abs(x0-x1)>1.e-3: raise ValueError("Assuming %f==%f"%(x0,x1))
     if abs(x0-xref)>1.e-3: raise ValueError("Assuming %f==%f"%(x0,xref))
     if abs(xref-x1)>1.e-3: raise ValueError("Assuming %f==%f"%(xref,x1))
@@ -134,6 +153,8 @@ for idx in range(0,oneUp.GetN()):
     yup=max(y1,y0) - yref
     ydn=yref -min(y1,y0) 
     two.SetPointError(n,0,0,ydn,yup)
+
+    print "[INFO]","Results: ->",x0," median is",yref," +/- (1s)",one_ydn,one_yup,"+/- (2s)",ydn,yup
 
 obs.SetMarkerStyle(21)
 obs.SetMarkerSize(0.5)
@@ -191,6 +212,16 @@ exp.Draw("L SAME")
 
 if opts.unblind: obs.Draw("PL SAME")
 
+ltx=ROOT.TLatex()
+if opts.label != "":
+   ltx.SetNDC() 
+   ltx.SetTextSize(0.04)
+   ltx.SetTextFont(42)
+   ltx.SetTextAlign(13)
+   #ltx.DrawLatex(0.18,0.88,opts.label)
+   ltx.SetTextAlign(33)
+   ltx.DrawLatex(0.93,.22,opts.label)
+
 
 dummy.Draw("AXIS SAME")
 dummy.Draw("AXIS X+ Y+ SAME")
@@ -200,6 +231,7 @@ c.Update()
 
 raw_input("Looks ok?")
 
-c.SaveAs(opts.outname + ".pdf")
-c.SaveAs(opts.outname + ".png")
-c.SaveAs(opts.outname + ".root")
+if opts.outname!="":
+    c.SaveAs(opts.outname + ".pdf")
+    c.SaveAs(opts.outname + ".png")
+    c.SaveAs(opts.outname + ".root")

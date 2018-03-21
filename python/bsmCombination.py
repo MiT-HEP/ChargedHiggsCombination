@@ -13,7 +13,7 @@ parser.add_option("","--feyn",help="FeynHiggs [%default]",default=os.environ['PW
 parser.add_option("","--flags",help="FeynHiggs flags [%default]",default="42423110")
 parser.add_option("-m","--model",help="LHCHXSDatacard [%default]",default='/'.join([os.environ['PWD'],'FeynHiggs-2.14.0', 'example','LHCHXSWG','mhmodm-LHCHXSWG.in']))
 parser.add_option("","--ncore",type='int',help="num. of core. [%default]",default=4)
-parser.add_option("-t","--templates",action='append',help="Template files to be copied in the work directory [%default]",default=[])
+parser.add_option("-t","--templates",action='append',help="Template files to be copied in the work directory. Can be specified more than once. [%default]",default=[])
 parser.add_option("","--br1",dest="br1",default=False,action="store_true",help="don't scale for br")
 
 scan_options = OptionGroup(parser,"Scan options","")
@@ -250,11 +250,11 @@ def prepareSubmission(m,t):
 
         #cmd = "cat "+ fout + "| grep 'prod:alt-t-Hp' | sed 's/^.*=//'"
         #"xsec_hp_%dTeV"%sqrtS
-        #  | prod:alt-t-Hp         =     20.6766    
+        #  | prod:alt-t-Hp         =     20.6766     fb
         cmd=' '.join(['cat',fout,"|","grep 'prod:alt-t-Hp'","|","sed 's/^.*=//'","|","tr -d ' '"])
         out=check_output(cmd,shell=True)
-        if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) FeynHiggs xsec=%(out)s"%{"mass":m,"tb":t,"sqrtS":sqrtS,"out":out}
-        params.append("xsec_hp_%dTeV=%f"%(sqrtS,float(out)))
+        if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) FeynHiggs xsec=%(out)s fb"%{"mass":m,"tb":t,"sqrtS":sqrtS,"out":out}
+        params.append("xsec_hp_%dTeV=%f"%(sqrtS,float(out)/1000.)) ## xsec is in fb
         if idx == 0 and not opts.br1:
             for ch in allCh:
                 gstr=""
@@ -296,6 +296,7 @@ def prepareSubmission(m,t):
     cmd+= ' ' + splitPointsDefault
     cmd+= ' ' + '--rMin=0'
     cmd+= ' ' + '--rMax=5' ## I care only around 1
+    cmd+= ' ' + '--strictBounds' ## as above
 
     print>>sh,"## Command issued automatically by",sys.argv[0]
     print>>sh,cmd
