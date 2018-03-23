@@ -10,6 +10,7 @@ bash <(curl -s https://raw.githubusercontent.com/cms-analysis/CombineHarvester/m
 ~~~
 
 * Install FeynHiggs: 
+    The version and url of FeynHiggs is controlled by the file download/feynhiggs.txt
 
 ~~~bash
 make 
