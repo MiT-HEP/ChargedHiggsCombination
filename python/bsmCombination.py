@@ -15,7 +15,7 @@ parser.add_option("-m","--model",help="LHCHXSDatacard [%default]",default='/'.jo
 parser.add_option("","--ncore",type='int',help="num. of core. [%default]",default=4)
 parser.add_option("-t","--templates",action='append',help="Template files to be copied in the work directory. Can be specified more than once. [%default]",default=[])
 parser.add_option("","--Hpm",dest='Hpm',action='store_true',help="Use twice the cross section of FeynHiggs to account for H+- [%default]",default=True)
-parser.add_option("","--Hplusonly",dest='Hpm',action='store_false',help="Use twice the cross section of FeynHiggs to account for H+- [%default]",default=True)
+parser.add_option("","--Hplusonly",dest='Hpm',action='store_false',help="Use twice the cross section of FeynHiggs to account for H+- [%default]")
 
 scan_options = OptionGroup(parser,"Scan options","")
 scan_options.add_option("","--mhp",help="MHp points (1000 or 100,200,500 or 200:1000:100) [%default]",default="1000")
