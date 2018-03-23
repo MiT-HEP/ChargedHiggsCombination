@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 import os,sys
 from optparse import OptionParser
-parser = OptionParser()
+
+usage=''' %prog [options]
+    Scripts to make model dependent limits on the hadd of all the combine output files. 
+    Original author: Andrea Carlo Marini. 23 Mar 2018.
+    '''
+parser = OptionParser(usage=usage)
 parser.add_option("-f","--file",dest="file",default="",type="string",help="Input file")
 parser.add_option("-l","--label",dest="label",default="",type="string",help="Label to add to the plot")
 parser.add_option("-o","--outname",dest="outname",help="Name of output pdf/png/C [%default]",default="")

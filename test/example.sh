@@ -1,6 +1,11 @@
+#!/bin/bash
+#Original author: Andrea Carlo Marini. 23 Mar 2018.
+
+#################################
+### SUBMISSION OF COMBINATION ###
+#################################
 
 dir=/afs/cern.ch/user/s/slaurila/public/CombineResults_taujets_180318_165817_RtauCategoriesCombined
-
 
 #for mhp in 180 200 220 300 400 500 750 800 1000 1500 2000 2500 3000 5000 7000
 for mhp in 180 200 220 300 400 500 750 800
@@ -9,5 +14,14 @@ do
 
 done
 
+############
+### HADD ###
+############
+
 # cd test/mhmodp; ../hadd2.sh
+
+############
+### PLOT ###
+############
+
 #python python/makeLimitPlot.py -f test/mhmodp/all.root -l mhmodp --xaxis=180,800 --yaxis=0,60 -o test/mhmodp/limit --MH125='test/mhmodp/Tau*/feyn*out'

@@ -3,8 +3,9 @@ from optparse import OptionParser, OptionGroup
 usage=''' %prog [options]
     High level script to call combination for BSM Models. 
     Send jobs on batch and calls FeynHiggs where relevant 
+    Original author: Andrea Carlo Marini. 23 Mar 2018.
     '''
-parser=OptionParser()
+parser=OptionParser(usage=usage)
 
 parser.add_option("-d","--dir" ,dest='dir',type='string',help="Directory where to write the configuration [%default]",default="submit")
 

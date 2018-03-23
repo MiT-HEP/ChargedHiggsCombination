@@ -5,6 +5,7 @@ from optparse import OptionParser, OptionGroup
 
 usage = '''usage: %prog [options]
         This script is adding a branch with a fixed value to a tree
+        Original author: Andrea Carlo Marini. 23 Mar 2018.
 '''
 parser=OptionParser(usage=usage)
 parser.add_option("-i","--input" ,dest='input',type='string',help="Input File [%default]",default="")
