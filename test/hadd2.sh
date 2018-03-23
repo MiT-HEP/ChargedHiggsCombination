@@ -1,10 +1,14 @@
 #!/bin/bash
 
-echo "Example of hadd script"
 
 ### 
 N=8
 TMPDIR=/tmp/${USER}
+
+#Original author: Andrea Carlo Marini. 23 Mar 2018.
+#Limited Parallelization based on https://unix.stackexchange.com/a/216475
+
+echo "Example of hadd script. Parallel add branch with $N processes. Will use $TMPDIR for process book-keeping"
 
 open_sem(){
     mkfifo ${TMPDIR}/pipe-$$
