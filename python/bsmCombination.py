@@ -14,7 +14,8 @@ parser.add_option("","--flags",help="FeynHiggs flags [%default]",default="424231
 parser.add_option("-m","--model",help="LHCHXSDatacard [%default]",default='/'.join([os.environ['PWD'],'FeynHiggs-2.14.0', 'example','LHCHXSWG','mhmodm-LHCHXSWG.in']))
 parser.add_option("","--ncore",type='int',help="num. of core. [%default]",default=4)
 parser.add_option("-t","--templates",action='append',help="Template files to be copied in the work directory. Can be specified more than once. [%default]",default=[])
-parser.add_option("","--br1",dest="br1",default=False,action="store_true",help="don't scale for br")
+parser.add_option("","--Hpm",dest='Hpm',action='store_true',help="Use twice the cross section of FeynHiggs to account for H+- [%default]",default=True)
+parser.add_option("","--Hplusonly",dest='Hpm',action='store_false',help="Use twice the cross section of FeynHiggs to account for H+- [%default]",default=True)
 
 scan_options = OptionGroup(parser,"Scan options","")
 scan_options.add_option("","--mhp",help="MHp points (1000 or 100,200,500 or 200:1000:100) [%default]",default="1000")
@@ -26,6 +27,8 @@ combine_options.add_option("-C","--combine",action='append',help="Pass this opti
 
 debug_options = OptionGroup(parser,"Debug options","")
 debug_options.add_option("","--debug",action='store_true',help="Debug status and printout [%default]",default=False)
+debug_options.add_option("","--br1",dest="br1",default=False,action="store_true",help="don't scale for br")
+debug_options.add_option("","--dryrun",dest="dryrun",default=False,action="store_true",help="don't call combineTools to submit the job")
 # add a verbosity 
 
 parser.add_option_group(scan_options)
@@ -254,7 +257,9 @@ def prepareSubmission(m,t):
         cmd=' '.join(['cat',fout,"|","grep 'prod:alt-t-Hp'","|","sed 's/^.*=//'","|","tr -d ' '"])
         out=check_output(cmd,shell=True)
         if opts.debug: print "[DEBUG]","Submission for (%(mass).0f,%(tb).1f,%(sqrtS).0f) FeynHiggs xsec=%(out)s fb"%{"mass":m,"tb":t,"sqrtS":sqrtS,"out":out}
-        params.append("xsec_hp_%dTeV=%f"%(sqrtS,float(out)/1000.)) ## xsec is in fb
+        hplus=1.0
+        if opts.Hpm: hplus*=2.0
+        params.append("xsec_hp_%dTeV=%f"%(sqrtS,hplus*float(out)/1000.)) ## xsec is in fb
         if idx == 0 and not opts.br1:
             for ch in allCh:
                 gstr=""
@@ -303,8 +308,9 @@ def prepareSubmission(m,t):
 
     if opts.debug: print "[DEBUG]","going to call combineTools with cmd:",cmd
 
-    st=call(cmd,shell=True)
-    if st != 0 : raise IOError("Unable to run:'"+cmd+"'")
+    if not opts.dryrun:
+        st=call(cmd,shell=True)
+        if st != 0 : raise IOError("Unable to run:'"+cmd+"'")
     return
 
 

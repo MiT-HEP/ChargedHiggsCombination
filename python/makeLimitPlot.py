@@ -12,6 +12,7 @@ parser.add_option(""  ,"--xaxis",help="X axis range X1,X2 [%default]",default=""
 parser.add_option("","--paper",dest="paper",default=False,action="store_true",help="don't display preliminary")
 parser.add_option("","--supplementary",dest="supplementary",default=False,action="store_true")
 parser.add_option(""  ,"--debug",type='int',help="More verbose output [%default]",default=0)
+parser.add_option("","--MH125",dest="MH125",default="",help="Draw MH !=125. I will look for feyn out files specified. Example: dir/*/feyn*out files (feynHiggs) ")
 
 opts,args=parser.parse_args()
 
@@ -172,17 +173,17 @@ one.SetLineStyle(2)
 two.SetLineStyle(2)
 
 one.SetFillColor(ROOT.kGreen+1)
-two.SetFillColor(ROOT.kOrange)
+two.SetFillColor(ROOT.kYellow)
 
 ###################
 ## Start Drawing ##
 ###################
 
 c=ROOT.TCanvas()
-c.SetCanvasSize(700,500)
+c.SetCanvasSize(800,800)
 c.SetBottomMargin(0.15)
 c.SetLeftMargin(0.15)
-c.SetTopMargin(0.10)
+c.SetTopMargin(0.05)
 c.SetRightMargin(0.05)
 
 ROOT.gStyle.SetOptTitle(0)
@@ -190,9 +191,9 @@ ROOT.gStyle.SetOptStat(0)
 
 if opts.xaxis != "":
     dummy = ROOT.TH1D("dummy","dummy",100, float(opts.xaxis.split(',')[0]), float(opts.xaxis.split(',')[1]))
-    dummy.GetXaxis().SetRangeUser(200,3000)
 else:
     dummy = ROOT.TH1D("dummy","dummy",1000, 0, 3000)
+    dummy.GetXaxis().SetRangeUser(200,3000)
 
 dummy.GetYaxis().SetRangeUser(0,60.)
 
@@ -200,6 +201,8 @@ dummy.GetXaxis().SetTitle("m_{H^{+}} [GeV]")
 dummy.GetYaxis().SetTitle("tan#beta")
 dummy.GetXaxis().SetTitleSize(0.05)
 dummy.GetYaxis().SetTitleSize(0.05)
+dummy.GetXaxis().SetTitleOffset(1.2)
+dummy.GetYaxis().SetTitleOffset(1.2)
 dummy.GetXaxis().SetLabelSize(0.045)
 dummy.GetYaxis().SetLabelSize(0.045)
 
@@ -212,6 +215,52 @@ exp.Draw("L SAME")
 
 if opts.unblind: obs.Draw("PL SAME")
 
+g125=ROOT.TGraph()
+if opts.MH125 != "":
+    from glob import glob
+    from subprocess import check_output
+    #parser.add_option("","--MH125",dest="MH125",default=False,action="store_true",help="Draw Mh != 125")
+    if opts.debug:print "[DEBUG]","Constructing 125 Exclusion region"
+    files=glob(opts.MH125)
+    excluded={} ## mHP -> TB excluded
+    if opts.debug: print "[DEBUG]","Processing",len(files),"files"
+    for idx,fout in enumerate(files):
+        if opts.debug and idx %1000==0: 
+		    print "\r Doing entry:",idx,"/",len(files), ":", "%.1f %%"%(float(idx)*100./len(files)),
+		    sys.stdout.flush()
+        #fetch tb,mhp and mh
+        cmd=' '.join(['cat',fout,"|","grep '^| TB'","|","sed 's/^.*=//'","|","tr -d ' '"])
+        out=check_output(cmd,shell=True)
+        tb=float(out)
+        cmd=' '.join(['cat',fout,"|","grep '^| MHp'","|","head -n 1","|","sed 's/^.*=//'","|","tr -d ' '"])
+        out=check_output(cmd,shell=True)
+        mhp=float(out)
+        cmd=' '.join(['cat',fout,"|","grep '^| Mh0'","|","sed 's/^.*=//'","|","tr -d ' '"])
+        out=check_output(cmd,shell=True)
+        mh0=float(out)
+        #if abs(tb-10)<0.1: print "[DEBUG]","MHp=",mhp,"TB=",tb,"mh0=",mh0
+
+        if abs(mh0-125)>3:
+            if "%.1f"%mhp not in excluded: excluded["%.1f"%mhp] = []
+            excluded["%.1f"%mhp] .append(tb)
+
+    masses=[ float(x) for x in excluded]
+    masses.sort()
+    keys=[ "%.1f"%y  for y in masses ]
+    for mhpstr in keys: ## keys are sorted
+        g125.SetPoint(g125.GetN(),float(mhpstr), max(excluded[mhpstr]))
+    # uncomment for having a compact region
+    #for mhpstr in reversed(keys): 
+    #    g125.SetPoint(g125.GetN(),float(mhpstr), min(excluded[mhpstr]))
+    #if len(keys) >0:
+    #    g125.SetPoint(g125.GetN(),float(keys[0]), max(excluded[keys[0]]))
+    g125.SetLineColor(ROOT.kRed)
+    g125.SetLineWidth(-503) ## 5 -> exclusion, 3 -> lineWidt
+    g125.SetFillStyle(3004)
+    g125.SetFillColor(ROOT.kRed)
+    g125.Draw("C SAME")
+        
+
 ltx=ROOT.TLatex()
 if opts.label != "":
    ltx.SetNDC() 
@@ -222,6 +271,80 @@ if opts.label != "":
    ltx.SetTextAlign(33)
    ltx.DrawLatex(0.93,.22,opts.label)
 
+obj=[]
+if True:
+    print "-> Adding NEW Legend"
+    obj.append(ltx)
+    ltx . SetNDC()
+    ltx . SetTextSize(0.05)
+    ltx . SetTextFont(42)
+    ltx . SetTextAlign(12)
+    xmin = 0.6
+    ymax = .5
+    textSep = 0.05
+    delta = 0.045
+    entryDelta = 0.07
+
+    dataPoint =  ROOT.TMarker(xmin,ymax,20)
+    dataPoint.SetMarkerColor(ROOT.kBlack)
+    dataPoint.SetMarkerStyle(obs.GetMarkerStyle())
+    dataPoint.SetMarkerSize(obs.GetMarkerSize())
+    dataPoint.SetNDC()
+    dataLine =  ROOT.TLine(xmin-delta/2., ymax ,xmin + delta/2, ymax)
+    dataLine.SetNDC()
+    dataLine.SetLineColor(ROOT.kBlack)
+    dataLine.SetLineWidth(1)
+    obj += [dataPoint,dataLine]
+    ## Draw data
+    dataPoint.Draw("SAME")
+    dataLine.Draw("SAME")
+    ltx.DrawLatex(xmin+ textSep,ymax,"Observed")
+    
+    ## draw median and error
+    y_exp = ymax - entryDelta
+    vertical=False
+    if vertical:
+        l_exp = ROOT.TLine(xmin,y_exp -delta/2., xmin,y_exp+delta/2.)
+        l_exp.SetNDC()
+        l_exp.SetLineColor(ROOT.kBlack)
+        l_exp.SetLineWidth(2)
+        l_exp.SetLineColor(1)
+        l_exp.SetLineStyle(7)
+        oneSigma = ROOT.TPave(xmin-delta/3.,y_exp-delta/2.,xmin+delta/3.,y_exp+delta/2.,0,"NDC")
+        twoSigma = ROOT.TPave(xmin-delta*2/3.,y_exp-delta/2.,xmin+delta*2/3.,y_exp+delta/2.,0,"NDC")
+        obj . extend([l_exp,oneSigma,twoSigma])
+    else:
+        l_exp = ROOT.TLine(xmin-delta/2.,y_exp, xmin + delta/2.,y_exp)
+        l_exp.SetNDC()
+        l_exp.SetLineColor(ROOT.kBlack)
+        l_exp.SetLineWidth(3)
+        l_exp.SetLineColor(1)
+        l_exp.SetLineStyle(2)
+        oneSigma = ROOT.TPave(xmin-delta/2.,y_exp-delta/3.,xmin+delta/2.,y_exp+delta/3.,0,"NDC")
+        twoSigma = ROOT.TPave(xmin-delta/2.,y_exp-delta*2/3.,xmin+delta/2.,y_exp+delta*2/3.,0,"NDC")
+        obj . extend([l_exp,oneSigma,twoSigma])
+    oneSigma.SetFillColor(ROOT.kGreen+1)
+    twoSigma.SetFillColor(ROOT.kYellow)
+    twoSigma.Draw("SAME")
+    oneSigma.Draw("SAME")
+    l_exp.Draw("SAME")
+    #ltx.DrawLatex(xmin +textSep,y_exp,"Expected (#scale[0.7]{background, 68% CL, 95% CL})")
+    ltx.DrawLatex(xmin +textSep,y_exp,"Expected")
+
+    if opts.MH125:
+        y_excl125 = ymax - 2*entryDelta
+        l_excl125 = ROOT.TLine(xmin-delta/2.,y_excl125 , xmin+delta/2.,y_excl125)
+        l_excl125.SetNDC()
+        l_excl125.SetLineColor(ROOT.kRed)
+        l_excl125.SetLineStyle(2)
+        l_excl125.SetLineWidth(3)
+
+        f_excl125 = ROOT.TPave(xmin-delta/2.,y_excl125-delta*2/3.,xmin+delta/2.,y_excl125+delta*2/3.,0,"NDC")
+        f_excl125.Draw("SAME")
+        f_excl125.SetFillStyle(3004)
+        f_excl125.SetFillColor(ROOT.kRed)
+        l_excl125.Draw("SAME")
+        ltx.DrawLatex(xmin +textSep,y_excl125,"m_{h}^{#scale[0.8]{MSSM} } #neq 125\pm3")
 
 dummy.Draw("AXIS SAME")
 dummy.Draw("AXIS X+ Y+ SAME")
