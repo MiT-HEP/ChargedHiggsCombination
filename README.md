@@ -23,11 +23,11 @@ There are the following scripts:
 
     Run the combination jobs to collect all the informations.
 
-* addToTree.py
+* python/addToTree.py
 
     Add to a ROOT TTree a branch with a specific value. Use to add a tb branch to the combine output
 
-* hadd[2].sh
+* test/hadd[2].sh
 
     Hadd [parallelizing the addToTree] all the combine files into a single results file. 
 
